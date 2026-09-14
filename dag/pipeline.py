@@ -302,6 +302,14 @@ def sales_pipeline():
 
         print("Load completed successfully.")
         
+    #main
+        
+    extracted_file = extract()
+    transformed_file = transform(extracted_file)
+    validated_file = validate(transformed_file)
+    load(validated_file)
+    
+    sales_pipeline()
         
         
         
