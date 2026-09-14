@@ -13,8 +13,6 @@ logs/
 *.sqlite
 *.sqlite3
 
-# Intermediate generated files
-data/intermediate/
 
 # macOS
 .DS_Store

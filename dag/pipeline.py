@@ -95,5 +95,218 @@ def sales_pipeline():
         df["order_date"] = df["Order Placed At"].dt.date
         df["order_month"] = df["Order Placed At"].dt.to_period("M").astype("string")
         
+        def clean_distance(value):
+            if pd.isna(value):
+                return None
+            
+            value = str(value).strip().lower()
+            
+            if value == "<1km":
+                return 0.5
+            
+            match = re.search(r"([\d.]+)", value)
+            
+            if match:
+                return float(match.group[1])
+            return None
+        
+        df["distance_km"] = (df["distance"].apply(clean_distance))
+        
+        numeric_columns = [
+            "Bill subtotal",
+            "Packaging charges",
+            "Restaurant discount (Promo)",
+            "Gold discount",
+            "Brand pack discount",
+            "Total",
+            "Rating",
+            "KPT duration (minutes)",
+            "Rider wait time (minutes)",
+        ]
+        
+        for col in numeric_columns:
+            df[col] = pd.to_numeric(df[col], errors = "coerce")
+            
+        
+        df = df.rename(
+            columns={
+                "Restaurant ID": "restaurant_id",
+                "Restaurant name": "restaurant_name",
+                "Subzone": "subzone",
+                "City": "city",
+                "Order ID": "order_id",
+                "Order Placed At": "order_placed_at",
+                "Order Status": "order_status",
+                "Delivery": "delivery_type",
+                "Distance": "distance_raw",
+                "Items in order": "items_in_order",
+                "Bill subtotal": "bill_subtotal",
+                "Packaging charges": "packaging_charges",
+                "Restaurant discount (Promo)": "promo_discount",
+                "Gold discount": "gold_discount",
+                "Brand pack discount": "brand_pack_discount",
+                "Total": "total",
+                "Rating": "rating",
+                "KPT duration (minutes)": "kpt_duration_minutes",
+                "Rider wait time (minutes)": "rider_wait_minutes",
+                "Customer ID": "customer_id",
+            }
+        )
+        
+        required_columns = [
+            "order_id",
+            "restaurant_id",
+            "customer_id",
+            "order_placed_at",
+            "order_status",
+            "total",
+        ]       
+        
+        
+        null_counts = df[required_columns].isna().sum()
+        
+        for col, count in null_counts.items():
+            if count > 0:
+                print(f"Warning: {count} null values found in required column '{col}'")
+                
+        df = df.dropna(subset = required_columns)
+        
+        df["total_pre_delivery_minutes"] = (
+            df["kpt_duration_minutes"].fillna(0)
+            + df["rider_wait_minutes"].fillna(0)
+        )
+        
+        df.to_csv(INTERMEDIATE_FILE, index=False)
+        
+        return str(INTERMEDIATE_FILE)
+    
+    #validate
+    @task
+    def validate(transformed_file: str) -> str:
+        transformed_path = Path(transformed_file)
+        
+        if not transformed_path.exists():
+            raise FileNotFoundError(f"Transformed file not found: {transformed_file}")
+        
+        df = pd.read_csv(transformed_file)
+        
+        if df.empty:
+            raise ValueError("Transformed DataFrame is empty")
+        
+        required_columns = [
+            "order_id",
+            "customer_id",
+            "restaurant_id",
+            "order_placed_at",
+            "order_status",
+            "total",
+        ]
+        
+        missing_columns = [
+            column
+            for column in required_columns
+            if column not in df.columns
+        ]
+        
+        if missing_columns:
+            raise ValueError(
+                "Validation failed. Missing columns: "
+                f"{missing_columns}"
+            )
+        
+        duplicate_order_ids = df["order_id"][df["order_id"].duplicated()]
+        
+        if duplicate_order_ids.any():
+            raise ValueError(
+                "Validation failed. Duplicate order IDs found: "
+                f"{duplicate_order_ids.tolist()}"
+            )
+            
+        negative_total_values = df[df["total"] < 0]
+        
+        if negative_total_values.any().any():
+            raise ValueError(
+                "Validation failed. Negative total values found in the following rows: "
+                f"{negative_total_values.index.tolist()}"
+            )
+        
+        
+        critical_nulls = (
+            df[required_columns]
+            .isna()
+            .sum()
+            .sum()
+        )
+
+        if critical_nulls > 0:
+            raise ValueError(
+                "Validation failed: "
+                f"{critical_nulls} NULL values "
+                "in critical fields."
+            )
+        return transformed_file
+        
+    #load
+    @task
+    def load(validated_file: str) -> None:
+        df = pd.read_csv(validated_file)
+        
+        conn = sqllite3.connect(DATABASE_FILE)
+        
+        try:
+            df.to_sql("orders", conn, if_exists = "replace", index=False)
+            
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_orders_customer
+                ON orders(customer_id)
+                """
+            )
+
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_orders_restaurant
+                ON orders(restaurant_id)
+                """
+            )
+
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_orders_date
+                ON orders(order_date)
+                """
+            )
+            
+            conn.commit()
+            
+            cursor.execute(
+                "SELECT COUNT(*) FROM orders"
+            )
+
+            loaded_rows = cursor.fetchone()[0]
+
+            print(
+                f"Rows loaded into SQLite: "
+                f"{loaded_rows}"
+            )
+
+            print(
+                f"Database location: "
+                f"{DATABASE_FILE}"
+            )
+
+        finally:
+            conn.close()
+
+        print("Load completed successfully.")
+        
+        
+        
+        
+            
+
+        
         
         
