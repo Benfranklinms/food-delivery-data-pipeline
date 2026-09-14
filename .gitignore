@@ -1,0 +1,20 @@
+# Environment files
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Airflow
+logs/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Intermediate generated files
+data/intermediate/
+
+# macOS
+.DS_Store
