@@ -16,6 +16,8 @@ INTERMEDIATE_FILE = BASE_DIR / "data" / "intermediate" / "cleaned_orders.csv"
 
 DATABASE_FILE = BASE_DIR / "data" / "food_delivery.db"
 
+ANALYTICS_SQL = BASE_DIR / "scripts" / "analytics.sql"
+
 SELECTED_COLUMNS = [
     "Restaurant ID",
     "Restaurant name",
@@ -234,7 +236,7 @@ def sales_pipeline():
         return transformed_file
 
     @task
-    def load(validated_file: str) -> None:
+    def load(validated_file: str) -> str:
         df = pd.read_csv(validated_file)
 
         DATABASE_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -281,10 +283,70 @@ def sales_pipeline():
 
         print("Load completed successfully.")
 
+        return str(DATABASE_FILE)
+
+    @task
+    def analytics(db_path: str) -> None:
+        analytics_sql = ANALYTICS_SQL
+
+        if not analytics_sql.exists():
+            print(f"Analytics SQL not found: {analytics_sql}, skipping")
+            return
+
+        db_file = Path(db_path)
+
+        if not db_file.exists():
+            raise FileNotFoundError(f"Database not found for analytics: {db_file}")
+
+        conn = sqlite3.connect(db_file)
+
+        try:
+            sql_text = analytics_sql.read_text()
+
+            # Split on ';' to execute each statement individually so SELECT results can be logged.
+            # SQLite will ignore standalone comment-only fragments.
+            statements = [s.strip() for s in sql_text.split(";") if s.strip()]
+
+            for idx, stmt in enumerate(statements, start=1):
+                # Skip fragments that are only comments/whitespace
+                stripped = "\n".join(
+                    line for line in stmt.splitlines() if not line.strip().startswith("--")
+                ).strip()
+
+                if not stripped:
+                    continue
+
+                cursor = conn.cursor()
+                cursor.execute(stmt)
+
+                # Only SELECTs return rows; for other statements just commit.
+                if stmt.lstrip().upper().startswith("SELECT") or "SELECT" in stmt.upper():
+                    try:
+                        rows = cursor.fetchall()
+                        cols = [d[0] for d in cursor.description] if cursor.description else []
+                        print(f"\n-- Analytics Query {idx}: {len(rows)} rows --")
+                        if cols:
+                            print(" | ".join(cols))
+                        for row in rows[:10]:
+                            print(row)
+                        if len(rows) > 10:
+                            print(f"... {len(rows) - 10} more rows")
+                    except sqlite3.ProgrammingError:
+                        # No results to fetch (e.g., pure comment fragment)
+                        pass
+                else:
+                    conn.commit()
+
+            print("\nAnalytics completed successfully.")
+
+        finally:
+            conn.close()
+
     extracted_file = extract()
     transformed_file = transform(extracted_file)
     validated_file = validate(transformed_file)
-    load(validated_file)
+    db_path = load(validated_file)
+    analytics(db_path)
 
 
 sales_pipeline()
