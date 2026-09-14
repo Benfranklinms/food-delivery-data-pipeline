@@ -363,8 +363,3 @@ sqlite3 data/food_delivery.db "SELECT order_month, SUM(total) FROM orders WHERE 
 - Add schedule (e.g., `@daily`) and catchup/backfill support
 - Export analytics results to `data/marts/` (CSV/Parquet) or a BI tool
 - Add unit tests for `clean_distance` and transform logic, and CI (e.g., `pytest` + `astro dev parse`)
-
-## License
-
-No license file currently. Add `LICENSE` if you intend to open-source.
-
