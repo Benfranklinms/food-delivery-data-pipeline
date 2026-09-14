@@ -286,14 +286,15 @@ def sales_pipeline():
         return str(DATABASE_FILE)
 
     @task
-    def analytics(db_path: str) -> None:
+    def analytics(db_path: str | None = None) -> None:
         analytics_sql = ANALYTICS_SQL
 
         if not analytics_sql.exists():
             print(f"Analytics SQL not found: {analytics_sql}, skipping")
             return
 
-        db_file = Path(db_path)
+        # Fallback for old DagRuns where load() returned None (pre-v2) — use default DB.
+        db_file = Path(db_path) if db_path else DATABASE_FILE
 
         if not db_file.exists():
             raise FileNotFoundError(f"Database not found for analytics: {db_file}")
