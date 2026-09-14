@@ -33,6 +33,8 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: >-
         postgresql+psycopg2://airflow:airflow@postgres/airflow
 
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
 
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
@@ -44,19 +46,7 @@ services:
       - ./scripts:/opt/airflow/scripts
       - ./logs:/opt/airflow/logs
 
-    command: >
-      bash -c "
-        airflow db migrate &&
-        airflow users create
-          --username airflow
-          --password airflow
-          --firstname Admin
-          --lastname User
-          --role Admin
-          --email admin@example.com
-          || true &&
-        airflow standalone
-      "
+    command: bash -c "airflow standalone"
 
 
 volumes:

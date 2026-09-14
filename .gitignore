@@ -4,9 +4,13 @@
 # Python
 __pycache__/
 *.py[cod]
+venv/
+.venv/
 
 # Airflow
 logs/
+data/intermediate/
+data/food_delivery.db
 
 # Local databases
 *.db

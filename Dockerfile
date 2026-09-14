@@ -1,4 +1,4 @@
 FROM apache/airflow:3.3.1
 
-
-RUN pip install --no-cache-dir pandas
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt

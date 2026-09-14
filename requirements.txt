@@ -1,1 +1,7 @@
-pandas
+# Sales Pipeline - Python dependencies
+# Base image: apache/airflow:3.3.1 (Python 3.12)
+# Pin major versions for reproducibility; compatible with Airflow 3.3.1
+
+pandas==2.3.3
+pendulum>=3.0
+pyarrow>=15.0
